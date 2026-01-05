@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Demo Login (Inseguro)</title>
+	<style>
+		:root {
+			font-family: system-ui, Arial, sans-serif;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100dvh;
+			display: grid;
+			place-items: center;
+			background: #111;
+			color: #eee;
+		}
+
+		.card {
+			background: #1e1e1e;
+			padding: 2rem 2.5rem;
+			border-radius: 16px;
+			width: clamp(300px, 90vw, 420px);
+			box-shadow: 0 8px 24px -6px rgba(0, 0, 0, .6);
+		}
+
+		h1 {
+			margin-top: 0;
+			font-size: 1.75rem;
+		}
+
+		form {
+			display: flex;
+			flex-direction: column;
+			gap: 1rem;
+		}
+
+		label {
+			display: flex;
+			flex-direction: column;
+			font-size: .85rem;
+			letter-spacing: .5px;
+			text-transform: uppercase;
+			gap: .35rem;
+		}
+
+		input {
+			padding: .75rem .9rem;
+			border: 1px solid #444;
+			border-radius: 8px;
+			background: #121212;
+			color: #eee;
+			font-size: 1rem;
+		}
+
+		input:focus {
+			outline: 2px solid #3b82f6;
+			border-color: #3b82f6;
+		}
+
+		button {
+			padding: .9rem 1.1rem;
+			border: none;
+			border-radius: 8px;
+			background: #3b82f6;
+			color: #fff;
+			font-weight: 600;
+			font-size: 1rem;
+			cursor: pointer;
+		}
+
+		button:hover {
+			background: #1d4ed8;
+		}
+
+		.msg {
+			margin-top: 1rem;
+			padding: .75rem 1rem;
+			border-radius: 8px;
+			font-size: .9rem;
+			line-height: 1.3;
+		}
+
+		.success {
+			background: #065f46;
+			color: #d1fae5;
+		}
+
+		.error {
+			background: #7f1d1d;
+			color: #fee2e2;
+		}
+
+		.warn {
+			background: #78350f;
+			color: #ffedd5;
+		}
+
+		code {
+			background: #222;
+			padding: .15rem .35rem;
+			border-radius: 4px;
+			font-size: .8rem;
+		}
+
+		footer {
+			margin-top: 2rem;
+			font-size: .7rem;
+			opacity: .7;
+			text-align: center;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="card">
+		<h1>Login Demo SQL (Inseguro vs Seguro)</h1>
+		<p style="font-size:.85rem; opacity:.8;">Front de demostración educativa: ver diferencia entre concatenar
+			strings y usar parámetros / ORM.</p>
+		<form id="loginForm" autocomplete="off">
+			<label>Usuario
+				<input id="user" name="user" required placeholder="usuario" />
+			</label>
+			<label>Contraseña
+				<input id="pass" name="pass" type="text" required placeholder="contraseña" />
+			</label>
+			<div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+				<button type="button" id="btnInsecure">Login Inseguro</button>
+				<button type="button" id="btnSecure" style="background:#10b981;">Login Seguro</button>
+				<button type="submit" style="background:#6366f1;">Login (Mock Local)</button>
+			</div>
+		</form>
+		<div id="output"></div>
+		<div id="apiOutput"></div>
+		<footer>
+			Ejemplo educativo. Para proteger: usar consultas parametrizadas / hashing / validación estricta.
+		</footer>
+	</div>
+
+	<script>
+		// AVISO: Este script simula una lógica vulnerable SOLO PARA DEMO.
+		// En un backend inseguro, se concatenaría directamente algo como:
+		// SELECT * FROM usuarios WHERE user = '" + user + "' AND pass = '" + pass + "';
+		// Lo que permite que pass = "1234' OR 5=5 --" altere la lógica.
+
+		const form = document.getElementById('loginForm');
+		const output = document.getElementById('output');
+
+		function renderMessage(html, type = 'success') {
+			output.innerHTML = `<div class="msg ${type}">${html}</div>`;
+		}
+
+		// Construye una query vulnerable concatenando directamente las entradas.
+		function buildVulnerableQuery(user, pass) {
+			return `SELECT * FROM usuarios WHERE user='${user}' AND pass='${pass}';`;
+		}
+
+		// Versión segura (solo ilustrativa) usando placeholders parametrizados.
+		function buildSafeQuery() {
+			return 'SELECT * FROM usuarios WHERE user = ? AND pass = ?';
+		}
+
+		// Escapado mínimo para mostrar la query en HTML (solo reemplaza < y &)
+		function esc(str) {
+			return str.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+		}
+
+		form.addEventListener('submit', (e) => {
+			e.preventDefault();
+			const user = document.getElementById('user').value.trim();
+			const pass = document.getElementById('pass').value.trim();
+
+			// Mock de verificación legítima (hardcodeada):
+			const legit = (user === 'gaston' && pass === '1234');
+
+			// Patrón típico de inyección: se cierra la comilla y se agrega OR X=X (tautología).
+			// Ejemplos que disparan esto: 1234' OR 5=5   |   abc' OR 1=1 --
+			// MUY simplificado: buscamos ' OR <numero>=<numero>
+			const injection = /'\s+OR\s+\d+\s*=\s*\d+/i.test(pass);
+
+			if (legit || injection) {
+				const vulnerableQuery = buildVulnerableQuery(user, pass);
+				const safeQuery = buildSafeQuery();
+				const reason = legit ? 'credenciales válidas' : 'inyección reconocida (tautología OR)';
+				const details = `
+					<h2 style="margin:.2rem 0;">Logueado con éxito</h2>
+					<p>Condición: ${reason}</p>
+					<p style="font-size:.75rem;opacity:.8;">Query vulnerable generada:</p>
+					<pre style="background:#222;padding:.6rem;border-radius:6px;white-space:pre-wrap;">${esc(vulnerableQuery)}</pre>
+					<p style="font-size:.7rem;opacity:.7;">(Ilustración) Cómo debería verse parametrizada:</p>
+					<pre style="background:#1f2937;padding:.5rem;border-radius:6px;white-space:pre-wrap;">${safeQuery}</pre>
+				`;
+				renderMessage(details);
+			} else {
+				renderMessage('Credenciales incorrectas', 'error');
+			}
+
+			// Mensaje educativo adicional si detecta intento de inyección
+			if (injection && !legit) {
+				const warn = document.createElement('div');
+				warn.className = 'msg warn';
+				warn.innerHTML = '<strong>Advertencia:</strong> Esto funciona aquí porque el código es vulnerable. En un sistema real debes usar consultas parametrizadas (prepared statements) y NUNCA concatenar entradas directas.';
+				output.appendChild(warn);
+			}
+		});
+
+		// --- Integración con backend ---
+		const apiOutput = document.getElementById('apiOutput');
+		function renderApi(data, type = 'success') {
+			apiOutput.innerHTML = `<div class="msg ${type}"><pre style="background:#222;padding:.6rem;border-radius:6px;white-space:pre-wrap;">${esc(JSON.stringify(data, null, 2))}</pre></div>`;
+		}
+
+		const API_BASE = 'http://127.0.0.1:8000'; // Ajustar si tu servidor corre en otro host/puerto
+
+		async function callApi(path, payload) {
+			const url = API_BASE + path;
+			try {
+				const res = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+				let data;
+				const ct = res.headers.get('Content-Type') || '';
+				if (ct.includes('application/json')) {
+					data = await res.json();
+				} else {
+					data = { status: res.status, statusText: res.statusText, body: await res.text() };
+				}
+				renderApi(data, data.logged_in ? 'success' : 'error');
+			} catch (err) {
+				renderApi({ error: err.message, endpoint: url }, 'error');
+			}
+		}
+
+		const btnInsecure = document.getElementById('btnInsecure');
+		const btnSecure = document.getElementById('btnSecure');
+
+		btnInsecure.addEventListener('click', () => {
+			const user = document.getElementById('user').value.trim();
+			const pass = document.getElementById('pass').value.trim();
+			callApi('/insecure_login', { username: user, password: pass });
+		});
+
+		btnSecure.addEventListener('click', () => {
+			const user = document.getElementById('user').value.trim();
+			const pass = document.getElementById('pass').value.trim();
+			callApi('/secure_login', { username: user, password: pass });
+		});
+	</script>
+</body>
+
+</html>
